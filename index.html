@@ -44,6 +44,23 @@ input[type=date],input[type=search]{width:100%;min-height:44px;padding:0 12px;bo
 .btn{min-height:44px;padding:0 18px;border-radius:10px;background:var(--ac);color:var(--acx);font-weight:600}
 .toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 20px);transform:translateX(-50%);background:#111;color:#fff;padding:10px 16px;border-radius:20px;font-size:13px;z-index:20}
 #ptr{text-align:center;font-size:12px;color:var(--mut);height:0;overflow:hidden}
+/* mode warna */
+.seg{display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:4px;background:var(--ln);border-radius:12px;margin-bottom:10px}
+.seg button{min-height:44px;border-radius:9px;font-weight:600;color:var(--mut)}
+.seg button.on{background:var(--card);color:var(--tx);box-shadow:0 1px 3px rgba(0,0,0,.18)}
+.g{background:var(--card);border:1px solid var(--ln);border-radius:12px;margin-top:8px;overflow:hidden}
+.g.merah{background:var(--redbg);border-color:var(--red)}
+.gh{width:100%;text-align:left;display:flex;align-items:center;gap:10px;padding:10px 12px;min-height:56px}
+.gh .t{flex:1;min-width:0}
+.gh .k{font-size:11px;color:var(--mut)}.gh .n{font-weight:700}.gh .j{font-size:12px;color:var(--mut)}
+.gh .s{text-align:right}.gh .s small{display:block;font-size:11px;color:var(--mut)}.gh .s b{font-size:17px}
+.g.merah .gh .s b{color:var(--red)}
+.gh .ar{color:var(--mut);transition:transform .15s}.g.open .ar{transform:rotate(90deg)}
+.gb{display:none;border-top:1px solid var(--ln)}.g.open .gb{display:block}
+.g.merah .gb{background:var(--card)}
+.w{padding:8px 12px;border-bottom:1px solid var(--ln)}.w:last-child{border-bottom:0}
+.w .wn{font-weight:600;font-size:14px;margin-bottom:4px}
+.w.merah{background:var(--redbg)}.w.merah .st b{color:var(--red)}
 /* login */
 #vLogin{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;gap:14px}
 .dots{height:20px;font-size:22px;letter-spacing:8px;min-width:120px;text-align:center}
@@ -72,7 +89,9 @@ input[type=date],input[type=search]{width:100%;min-height:44px;padding:0 12px;bo
     <button class="ib" id="bSet" aria-label="Pengaturan">⚙</button></header>
   <div class="wrap">
     <div id="ptr">Lepas untuk menyegarkan…</div>
-    <div class="row"><label for="tgl" style="white-space:nowrap">Tanggal aktif</label><input type="date" id="tgl"></div>
+    <div class="seg" id="seg"><button data-m="stok">Stok</button><button data-m="warna">Warna</button></div>
+    <div class="row" id="tglRow"><label for="tgl" style="white-space:nowrap">Tanggal aktif</label><input type="date" id="tgl"></div>
+    <div class="upd" id="info" hidden>Total sampai hari ini</div>
     <div class="upd" id="upd"></div>
     <div id="body">
       <div class="cards" id="cards"></div>
@@ -81,7 +100,7 @@ input[type=date],input[type=search]{width:100%;min-height:44px;padding:0 12px;bo
           <button class="chip" id="bSort">Urut: Nama</button></div>
         <div class="chips" id="chips"></div>
       </div>
-      <div id="list"></div><div id="sent"></div>
+      <div id="list"></div><div id="wlist" hidden></div><div id="sent"></div>
     </div>
   </div>
 </section>
@@ -107,13 +126,15 @@ input[type=date],input[type=search]{width:100%;min-height:44px;padding:0 12px;bo
 
 <script>
 const API_URL = 'https://script.google.com/macros/s/AKfycbwpiMrIj6OoFAeCk-OMz8iWDaYlQwGAtrWSgYY9WEE6qxvNL4grQ229NWTulAEtdivz/exec';   // <-- tempel URL Web App Apps Script (berakhiran /exec)
-const APP_VERSION = '1.0.0';
+const APP_VERSION = '1.1.0';
 const $ = s => document.querySelector(s);
 const fmt = n => new Intl.NumberFormat('id-ID', {maximumFractionDigits: 2}).format(n);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const hariIni = () => new Date().toLocaleDateString('sv-SE', {timeZone: 'Asia/Jakarta'});
 const tglID = s => s.split('-').reverse().join('/');
-const S = {token: localStorage.token, nama: localStorage.nama, tgl: hariIni(), data: null, kel: '', q: '', sort: 0, list: [], shown: 0, pin: '', sy: 0, cur: null};
+const S = {token: localStorage.token, nama: localStorage.nama, tgl: hariIni(), data: null, kel: '', q: '', sort: 0, list: [], shown: 0, pin: '', sy: 0, cur: null,
+  mode: (() => { try { return sessionStorage.mode === 'warna' ? 'warna' : 'stok'; } catch (e) { return 'stok'; } })(),
+  w: null, wkel: '', wq: '', wsort: 0, wl: [], wshown: 0, open: new Set(), closed: new Set(), updS: '', updW: ''};
 const SORTS = ['Urut: Nama', 'Urut: Stok ↑', 'Urut: Stok ↓'];
 
 function toast(t) { const e = $('#toast'); e.textContent = t; e.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => e.hidden = true, 2500); }
@@ -152,7 +173,7 @@ $('#masuk').onclick = async () => {
 async function keluar(diam) {
   if (!diam && S.token) api({aksi: 'logout', token: S.token}).catch(() => {});
   localStorage.removeItem('token'); localStorage.removeItem('nama');
-  S.token = S.nama = null; S.data = null; $('#list').innerHTML = '';
+  S.token = S.nama = null; S.data = null; S.w = null; $('#list').innerHTML = ''; $('#wlist').innerHTML = '';
   show('Login'); if (diam) $('#lmsg').textContent = 'Sesi berakhir, silakan masuk lagi';
 }
 
@@ -164,10 +185,10 @@ async function muat(refresh) {
   try {
     const r = await api({aksi: 'dashboard', token: S.token, tanggal: S.tgl, refresh: !!refresh});
     if (!r.ok) throw new Error(r.error);
-    S.data = r; gambar();
-    $('#upd').textContent = 'Diperbarui pukul ' + r.diperbarui;
+    S.data = r; S.updS = 'Diperbarui pukul ' + r.diperbarui; if (S.mode === 'stok') gambar();
+    if (S.mode === 'stok') $('#upd').textContent = S.updS;
   } catch (e) {
-    $('#upd').textContent = '';
+    if (S.mode === 'stok') $('#upd').textContent = '';
     if (S.data) toast(e.message);
     else $('#list').innerHTML = '<div class="err">' + esc(e.message) + '<br><br><button class="btn" id="retry">Coba lagi</button></div>',
          $('#retry').onclick = () => muat(true);
@@ -202,20 +223,114 @@ function lagi() {   // render bertahap 60 item
   }
   l.insertAdjacentHTML('beforeend', h); S.shown = end;
 }
-new IntersectionObserver(e => { if (e[0].isIntersecting && S.data && S.shown < S.list.length) lagi(); }, {rootMargin: '400px'}).observe($('#sent'));
+new IntersectionObserver(e => {
+  if (!e[0].isIntersecting) return;
+  if (S.mode === 'warna') { if (S.w && S.wshown < S.wl.length) lagiW(); }
+  else if (S.data && S.shown < S.list.length) lagi();
+}, {rootMargin: '400px'}).observe($('#sent'));
 
 $('#tgl').onchange = e => { S.tgl = e.target.value || hariIni(); muat(); };
-$('#q').oninput = e => { S.q = e.target.value; if (S.data) filter(); };
-$('#chips').onclick = e => { const b = e.target.closest('.chip'); if (!b) return; S.kel = b.dataset.k; gambar(); };
-$('#bSort').onclick = () => { S.sort = (S.sort + 1) % 3; $('#bSort').textContent = SORTS[S.sort]; if (S.data) filter(); };
-$('#bRef').onclick = () => muat(true);
+$('#q').oninput = e => {
+  if (S.mode === 'warna') { S.wq = e.target.value; S.closed.clear(); if (S.w) filterW(); }
+  else { S.q = e.target.value; if (S.data) filter(); }
+};
+$('#chips').onclick = e => { const b = e.target.closest('.chip'); if (!b) return; if (S.mode === 'warna') { S.wkel = b.dataset.k; gambarW(); } else { S.kel = b.dataset.k; gambar(); } };
+$('#bSort').onclick = () => {
+  if (S.mode === 'warna') { S.wsort = (S.wsort + 1) % 3; $('#bSort').textContent = SORTS[S.wsort]; if (S.w) filterW(); }
+  else { S.sort = (S.sort + 1) % 3; $('#bSort').textContent = SORTS[S.sort]; if (S.data) filter(); }
+};
+$('#bRef').onclick = () => segarkan(true);
 $('#list').onclick = e => { const it = e.target.closest('.it'); if (it) bukaRiwayat(S.list[it.dataset.i]); };
 
 // tarik ke bawah untuk menyegarkan
 let y0 = null;
 addEventListener('touchstart', e => { y0 = scrollY === 0 && !$('#vDash').hidden ? e.touches[0].clientY : null; }, {passive: true});
 addEventListener('touchmove', e => { if (y0 !== null) $('#ptr').style.height = Math.min(40, Math.max(0, (e.touches[0].clientY - y0) / 3)) + 'px'; }, {passive: true});
-addEventListener('touchend', () => { if (y0 !== null && parseInt($('#ptr').style.height) >= 36) muat(true); $('#ptr').style.height = 0; y0 = null; });
+addEventListener('touchend', () => { if (y0 !== null && parseInt($('#ptr').style.height) >= 36) segarkan(true); $('#ptr').style.height = 0; y0 = null; });
+
+/* ---------- Dashboard Warna ---------- */
+const AMBANG_MERAH = -5;   // merah jika stok < ambang (sama dengan dashboard Stok)
+function segarkan(refresh) { return S.mode === 'warna' ? muatW(refresh) : muat(refresh); }
+function setMode(m) {
+  S.mode = m; try { sessionStorage.mode = m; } catch (e) {}
+  document.querySelectorAll('#seg button').forEach(b => b.classList.toggle('on', b.dataset.m === m));
+  const w = m === 'warna';
+  $('#tglRow').hidden = w; $('#cards').hidden = w; $('#list').hidden = w; $('#wlist').hidden = !w; $('#info').hidden = !w;
+  $('#q').value = w ? S.wq : S.q;
+  $('#bSort').textContent = SORTS[w ? S.wsort : S.sort];
+  $('#upd').textContent = (w ? S.updW : S.updS) || '';
+  if (w) { if (S.w) gambarW(); else muatW(); }
+  else if (S.data) gambar(); else muat();
+}
+function prosesW(d) {
+  const m = new Map();
+  d.forEach(x => {
+    const k = x.kelompok + '|' + x.barang;
+    let g = m.get(k);
+    if (!g) { g = {key: k, kelompok: x.kelompok, barang: x.barang, warna: [], stok: 0}; m.set(k, g); }
+    g.warna.push(x); g.stok += x.stok;
+  });
+  m.forEach(g => {
+    g.stok = Math.round(g.stok * 100) / 100; g.merah = g.stok < AMBANG_MERAH;
+    g.warna.forEach(w => w.merah = w.stok < AMBANG_MERAH);
+  });
+  return [...m.values()];
+}
+async function muatW(refresh) {
+  $('#upd').textContent = 'Memuat…';
+  if (!S.w) $('#wlist').innerHTML = '<div class="sk"></div>'.repeat(6);
+  try {
+    const r = await api({aksi: 'warna', token: S.token, refresh: !!refresh});
+    if (!r.ok) throw new Error(r.error);
+    S.w = prosesW(r.daftar); S.updW = 'Diperbarui pukul ' + r.diperbarui;
+    if (S.mode === 'warna') { gambarW(); $('#upd').textContent = S.updW; }
+  } catch (e) {
+    if (S.mode !== 'warna') return;
+    $('#upd').textContent = '';
+    if (S.w) toast(e.message);
+    else { $('#wlist').innerHTML = '<div class="err">' + esc(e.message) + '<br><br><button class="btn" id="wRetry">Coba lagi</button></div>'; $('#wRetry').onclick = () => muatW(true); }
+  }
+}
+function gambarW() {
+  const kels = [...new Set(S.w.map(g => g.kelompok))].sort();
+  $('#chips').innerHTML = ['', ...kels].map(x => '<button class="chip' + (x === S.wkel ? ' on' : '') + '" data-k="' + esc(x) + '">' + (x ? esc(x) : 'Semua') + '</button>').join('');
+  filterW();
+}
+function filterW() {
+  const q = S.wq.trim().toLowerCase();
+  const byNama = (a, b) => a.kelompok.localeCompare(b.kelompok) || a.barang.localeCompare(b.barang);
+  const l = S.w.filter(g => (!S.wkel || g.kelompok === S.wkel) && (!q || g.barang.toLowerCase().includes(q)));
+  if (S.wsort === 1) l.sort((a, b) => a.stok - b.stok || byNama(a, b));
+  else if (S.wsort === 2) l.sort((a, b) => b.stok - a.stok || byNama(a, b));
+  else l.sort(byNama);
+  S.wl = l; S.wshown = 0; $('#wlist').innerHTML = '';
+  if (!l.length) $('#wlist').innerHTML = '<div class="err">Tidak ada barang yang cocok</div>';
+  lagiW();
+}
+const wTerbuka = k => S.wq.trim() ? !S.closed.has(k) : S.open.has(k);   // pencarian aktif = otomatis terbuka
+function lagiW() {   // render bertahap 40 barang
+  const end = Math.min(S.wshown + 40, S.wl.length);
+  let h = '';
+  for (let i = S.wshown; i < end; i++) {
+    const g = S.wl[i];
+    const ws = g.warna.slice().sort(S.wsort === 1 ? (a, b) => a.stok - b.stok : S.wsort === 2 ? (a, b) => b.stok - a.stok : (a, b) => a.warna.localeCompare(b.warna));
+    h += '<div class="g' + (g.merah ? ' merah' : '') + (wTerbuka(g.key) ? ' open' : '') + '" data-i="' + i + '">' +
+      '<button class="gh"><div class="t"><div class="k">' + esc(g.kelompok) + '</div><div class="n">' + esc(g.barang) + '</div><div class="j">' + g.warna.length + ' warna</div></div>' +
+      '<div class="s"><small>Stok</small><b>' + fmt(g.stok) + '</b></div><span class="ar">›</span></button><div class="gb">' +
+      ws.map(w => '<div class="w' + (w.merah ? ' merah' : '') + '"><div class="wn">' + esc(w.warna) + '</div><div class="r"><span>Total kirim<b>' + fmt(w.kirim) +
+        '</b></span><span>Total kembali<b>' + fmt(w.kembali) + '</b></span><span class="st">Stok<b>' + fmt(w.stok) + '</b></span></div></div>').join('') +
+      '</div></div>';
+  }
+  $('#wlist').insertAdjacentHTML('beforeend', h); S.wshown = end;
+}
+$('#wlist').onclick = e => {
+  const h = e.target.closest('.gh'); if (!h) return;
+  const g = h.parentNode, k = S.wl[g.dataset.i].key;
+  const set = S.wq.trim() ? S.closed : S.open;
+  if (set.has(k)) set.delete(k); else set.add(k);
+  g.classList.toggle('open', wTerbuka(k));
+};
+$('#seg').onclick = e => { const b = e.target.closest('button'); if (b && b.dataset.m !== S.mode) setMode(b.dataset.m); };
 
 /* ---------- Riwayat ---------- */
 function bukaRiwayat(b) {
@@ -249,7 +364,7 @@ $('#bInst').onclick = async () => { if (dip) { dip.prompt(); await dip.userChoic
 $('#sVer').textContent = APP_VERSION;
 
 /* ---------- Mulai ---------- */
-function mulai() { $('#tgl').value = S.tgl; show('Dash'); muat(); }
+function mulai() { $('#tgl').value = S.tgl; show('Dash'); setMode(S.mode); }
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
 if (S.token) mulai(); else show('Login');
 </script>
