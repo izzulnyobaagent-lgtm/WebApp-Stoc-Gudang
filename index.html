@@ -37,6 +37,7 @@ input[type=date],input[type=search]{width:100%;min-height:44px;padding:0 12px;bo
 .r{display:flex;justify-content:space-between;font-size:13px;color:var(--mut)}
 .r b{display:block;font-size:15px;color:var(--tx)}
 .r .st{text-align:right}
+.lm{font-size:12px;color:var(--mut);margin-top:6px}.lm b{font-size:12px;color:var(--tx);display:inline}
 .it.merah{background:var(--redbg);border-color:var(--red)}.it.merah .st b{color:var(--red)}
 .sk{height:84px;border-radius:12px;margin-top:8px;background:linear-gradient(90deg,var(--card),var(--ln),var(--card));background-size:200% 100%;animation:sk 1.2s infinite}
 @keyframes sk{to{background-position:-200% 0}}
@@ -126,12 +127,14 @@ input[type=date],input[type=search]{width:100%;min-height:44px;padding:0 12px;bo
 
 <script>
 const API_URL = 'https://script.google.com/macros/s/AKfycbwpiMrIj6OoFAeCk-OMz8iWDaYlQwGAtrWSgYY9WEE6qxvNL4grQ229NWTulAEtdivz/exec';   // <-- tempel URL Web App Apps Script (berakhiran /exec)
-const APP_VERSION = '1.1.0';
+const APP_VERSION = '1.2.0';
 const $ = s => document.querySelector(s);
 const fmt = n => new Intl.NumberFormat('id-ID', {maximumFractionDigits: 2}).format(n);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const hariIni = () => new Date().toLocaleDateString('sv-SE', {timeZone: 'Asia/Jakarta'});
 const tglID = s => s.split('-').reverse().join('/');
+const tglX = s => s ? tglID(s) : '-';
+const lm = o => '<div class="lm">Terakhir kirim: <b>' + tglX(o.terakhirKirim) + '</b> · Terakhir kembali: <b>' + tglX(o.terakhirKembali) + '</b></div>';
 const S = {token: localStorage.token, nama: localStorage.nama, tgl: hariIni(), data: null, kel: '', q: '', sort: 0, list: [], shown: 0, pin: '', sy: 0, cur: null,
   mode: (() => { try { return sessionStorage.mode === 'warna' ? 'warna' : 'stok'; } catch (e) { return 'stok'; } })(),
   w: null, wkel: '', wq: '', wsort: 0, wl: [], wshown: 0, open: new Set(), closed: new Set(), updS: '', updW: ''};
@@ -219,7 +222,7 @@ function lagi() {   // render bertahap 60 item
     const b = S.list[i];
     h += '<div class="it' + (b.merah ? ' merah' : '') + '" data-i="' + i + '"><div class="k">' + esc(b.kelompok) + '</div><div class="n">' + esc(b.barang) +
       '</div><div class="r"><span>Total kirim<b>' + fmt(b.totalKirim) + '</b></span><span>Total kembali<b>' + fmt(b.totalKembali) +
-      '</b></span><span class="st">Stok<b>' + fmt(b.stok) + '</b></span></div></div>';
+      '</b></span><span class="st">Stok<b>' + fmt(b.stok) + '</b></span></div>' + lm(b) + '</div>';
   }
   l.insertAdjacentHTML('beforeend', h); S.shown = end;
 }
@@ -267,8 +270,10 @@ function prosesW(d) {
   d.forEach(x => {
     const k = x.kelompok + '|' + x.barang;
     let g = m.get(k);
-    if (!g) { g = {key: k, kelompok: x.kelompok, barang: x.barang, warna: [], stok: 0}; m.set(k, g); }
+    if (!g) { g = {key: k, kelompok: x.kelompok, barang: x.barang, warna: [], stok: 0, terakhirKirim: null, terakhirKembali: null}; m.set(k, g); }
     g.warna.push(x); g.stok += x.stok;
+    if (x.terakhirKirim && (!g.terakhirKirim || x.terakhirKirim > g.terakhirKirim)) g.terakhirKirim = x.terakhirKirim;
+    if (x.terakhirKembali && (!g.terakhirKembali || x.terakhirKembali > g.terakhirKembali)) g.terakhirKembali = x.terakhirKembali;
   });
   m.forEach(g => {
     g.stok = Math.round(g.stok * 100) / 100; g.merah = g.stok < AMBANG_MERAH;
@@ -315,10 +320,10 @@ function lagiW() {   // render bertahap 40 barang
     const g = S.wl[i];
     const ws = g.warna.slice().sort(S.wsort === 1 ? (a, b) => a.stok - b.stok : S.wsort === 2 ? (a, b) => b.stok - a.stok : (a, b) => a.warna.localeCompare(b.warna));
     h += '<div class="g' + (g.merah ? ' merah' : '') + (wTerbuka(g.key) ? ' open' : '') + '" data-i="' + i + '">' +
-      '<button class="gh"><div class="t"><div class="k">' + esc(g.kelompok) + '</div><div class="n">' + esc(g.barang) + '</div><div class="j">' + g.warna.length + ' warna</div></div>' +
+      '<button class="gh"><div class="t"><div class="k">' + esc(g.kelompok) + '</div><div class="n">' + esc(g.barang) + '</div><div class="j">' + g.warna.length + ' warna</div>' + lm(g) + '</div>' +
       '<div class="s"><small>Stok</small><b>' + fmt(g.stok) + '</b></div><span class="ar">›</span></button><div class="gb">' +
       ws.map(w => '<div class="w' + (w.merah ? ' merah' : '') + '"><div class="wn">' + esc(w.warna) + '</div><div class="r"><span>Total kirim<b>' + fmt(w.kirim) +
-        '</b></span><span>Total kembali<b>' + fmt(w.kembali) + '</b></span><span class="st">Stok<b>' + fmt(w.stok) + '</b></span></div></div>').join('') +
+        '</b></span><span>Total kembali<b>' + fmt(w.kembali) + '</b></span><span class="st">Stok<b>' + fmt(w.stok) + '</b></span></div>' + lm(w) + '</div>').join('') +
       '</div></div>';
   }
   $('#wlist').insertAdjacentHTML('beforeend', h); S.wshown = end;
@@ -346,7 +351,7 @@ async function muatRiw() {
     const m = r.ringkasan;
     $('#rSum').innerHTML = '<div class="k" style="color:var(--mut);font-size:12px">' + esc(m.kelompok) + '</div><b style="font-size:17px">' + esc(m.barang) +
       '</b><div class="r" style="margin-top:8px"><span>Total kirim<b>' + fmt(m.totalKirim) + '</b></span><span>Total kembali<b>' + fmt(m.totalKembali) +
-      '</b></span><span class="st">Stok s/d ' + tglID(m.sampai) + '<b>' + fmt(m.stok) + '</b></span></div>';
+      '</b></span><span class="st">Stok s/d ' + tglID(m.sampai) + '<b>' + fmt(m.stok) + '</b></span></div>' + lm(m);
     $('#rList').innerHTML = r.transaksi.length ? r.transaksi.map(t =>
       '<div class="tx"><div><b>' + tglID(t.tanggal) + '</b> <span class="badge ' + esc(t.jenisNota) + '">' + esc(t.jenisNota) + '</span><div style="font-size:12px;color:var(--mut)">' +
       esc(t.noSuratJalan) + (t.keterangan ? ' · ' + esc(t.keterangan) : '') + '</div></div><b style="font-size:17px">' + fmt(t.jumlahKD) + ' KD</b></div>').join('')

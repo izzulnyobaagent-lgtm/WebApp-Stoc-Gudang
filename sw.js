@@ -1,5 +1,5 @@
 // Cache kerangka aplikasi saja, BUKAN data (API ada di domain lain dan tidak disentuh).
-const CACHE = 'stok-mitra-v1.1.0';
+const CACHE = 'stok-mitra-v1.2.0';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
